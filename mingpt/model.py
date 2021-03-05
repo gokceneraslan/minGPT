@@ -99,8 +99,9 @@ class TorchSelfAttention(nn.Module):
         # output projection
         self.proj = nn.Linear(config.n_embd, config.n_embd)
         # causal mask to ensure that attention is only applied to the left in the input sequence
-        self.register_buffer("mask", torch.triu(torch.ones(config.block_size, config.block_size, dtype=torch.bool)))
-                                     #.view(1, 1, config.block_size, config.block_size))
+        # Here dtype=bool, torch.triu unstead of tril and diagonal=1 are VERY important
+        mask_mat = torch.ones(config.block_size, config.block_size, dtype=torch.bool)
+        self.register_buffer("mask", torch.triu(mask_mat, diagonal=1)) 
 
     def forward(self, x):
         B, T, C = x.size()
@@ -110,7 +111,7 @@ class TorchSelfAttention(nn.Module):
         q = self.query(x).transpose(0, 1)
         v = self.value(x).transpose(0, 1)
 
-        y, _ = self.att(q, k, v, attn_mask=self.mask[:T, :T]) ## TODO: how to translate self.mask[:,:,:T,:T] == 0, float('-inf') here?
+        y, _ = self.att(q, k, v, attn_mask=self.mask[:T, :T])
         y = y.transpose(0, 1) # T x B x C -> B x T x C
         
         # output projection
