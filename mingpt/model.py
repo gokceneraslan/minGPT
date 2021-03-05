@@ -58,7 +58,7 @@ class CausalSelfAttention(nn.Module):
                                      .view(1, 1, config.block_size, config.block_size))
         self.n_head = config.n_head
 
-    def forward(self, x, layer_past=None):
+    def forward(self, x):
         B, T, C = x.size()
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -77,6 +77,46 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.resid_drop(self.proj(y))
         return y
+    
+    
+class TorchSelfAttention(nn.Module):    
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.att = nn.MultiheadAttention(
+            embed_dim=config.n_embd,
+            num_heads=config.n_head,
+            dropout=config.attn_pdrop,
+        )
+        
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads
+        self.key = nn.Linear(config.n_embd, config.n_embd)
+        self.query = nn.Linear(config.n_embd, config.n_embd)
+        self.value = nn.Linear(config.n_embd, config.n_embd)
+        # regularization
+        self.resid_drop = nn.Dropout(config.resid_pdrop)
+        # output projection
+        self.proj = nn.Linear(config.n_embd, config.n_embd)
+        # causal mask to ensure that attention is only applied to the left in the input sequence
+        self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.block_size)))
+                                     #.view(1, 1, config.block_size, config.block_size))
+
+    def forward(self, x):
+        B, T, C = x.size()
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        k = self.key(x).transpose(0, 1) # B x T x C -> T x B x C
+        q = self.query(x).transpose(0, 1)
+        v = self.value(x).transpose(0, 1)
+
+        y, _ = self.att(q, k, v, attn_mask=self.mask) ## TODO: how to translate self.mask[:,:,:T,:T] == 0, float('-inf') here?
+        y = y.transpose(0, 1) # T x B x C -> B x T x C
+        
+        # output projection
+        y = self.resid_drop(self.proj(y))
+        return y
+
 
 class Block(nn.Module):
     """ an unassuming Transformer block """
@@ -85,7 +125,7 @@ class Block(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(config.n_embd)
         self.ln2 = nn.LayerNorm(config.n_embd)
-        self.attn = CausalSelfAttention(config)
+        self.attn = TorchSelfAttention(config)
         self.mlp = nn.Sequential(
             nn.Linear(config.n_embd, 4 * config.n_embd),
             nn.GELU(),
@@ -142,7 +182,7 @@ class GPT(nn.Module):
         # separate out all parameters to those that will and won't experience regularizing weight decay
         decay = set()
         no_decay = set()
-        whitelist_weight_modules = (torch.nn.Linear, )
+        whitelist_weight_modules = (torch.nn.Linear, torch.nn.MultiheadAttention)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
