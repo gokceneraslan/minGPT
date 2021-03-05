@@ -99,7 +99,7 @@ class TorchSelfAttention(nn.Module):
         # output projection
         self.proj = nn.Linear(config.n_embd, config.n_embd)
         # causal mask to ensure that attention is only applied to the left in the input sequence
-        self.register_buffer("mask", torch.triu(torch.ones(config.block_size, config.block_size)))
+        self.register_buffer("mask", torch.triu(torch.ones(config.block_size, config.block_size, dtype=torch.bool)))
                                      #.view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
