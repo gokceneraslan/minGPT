@@ -110,7 +110,7 @@ class TorchSelfAttention(nn.Module):
         q = self.query(x).transpose(0, 1)
         v = self.value(x).transpose(0, 1)
 
-        y, _ = self.att(q, k, v, attn_mask=self.mask) ## TODO: how to translate self.mask[:,:,:T,:T] == 0, float('-inf') here?
+        y, _ = self.att(q, k, v, attn_mask=self.mask[:T, :T]) ## TODO: how to translate self.mask[:,:,:T,:T] == 0, float('-inf') here?
         y = y.transpose(0, 1) # T x B x C -> B x T x C
         
         # output projection
