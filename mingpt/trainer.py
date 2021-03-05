@@ -6,7 +6,7 @@ so nothing in this file really has anything to do with GPT specifically.
 import math
 import logging
 
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import numpy as np
 
 import torch
